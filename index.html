@@ -3,289 +3,185 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iFAST Symposium Planner 2026</title>
+    <title>iFAST Symposium 2026 | Live Planner</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <style>
-        [x-cloak] { display: none !important; }
-        .sortable-ghost { opacity: 0.3; background: #f1f5f9; border: 2px dashed #cbd5e1; }
-        .drag-handle { cursor: grab; }
-        .drag-handle:active { cursor: grabbing; }
-    </style>
-</head>
-<body class="bg-[#F8FAFC] min-h-screen" x-data="plannerApp()" x-init="init()">
 
-    <!-- TOP NAVIGATION -->
-    <nav class="bg-white border-b sticky top-0 z-50">
-        <div class="max-w-[1400px] mx-auto px-6 h-20 flex justify-between items-center">
-            <div class="flex items-center gap-4">
-                <div class="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center">
-                    <span class="text-white font-black text-xl">iF</span>
-                </div>
-                <div>
-                    <h1 class="font-bold text-slate-900 leading-none">Symposium Planner</h1>
-                    <span class="text-xs text-slate-400 font-medium">Internal Management Tool</span>
-                </div>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        // ============================================================
+        // STEP 1: FILL IN YOUR FIREBASE KEYS BELOW
+        // ============================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyDR2PyIsbw_hC-VX_o1wq3Hrs8ENsw6ik4",
+  authDomain: "symposium-planner.firebaseapp.com",
+  databaseURL: "https://symposium-planner-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "symposium-planner",
+  storageBucket: "symposium-planner.firebasestorage.app",
+  messagingSenderId: "849349532944",
+  appId: "1:849349532944:web:7f24c18136cacdaee19995",
+  measurementId: "G-TNQQ95DHMX"
+        };
+        // ============================================================
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        window.dbRef = ref(db, 'symposium_2026');
+        window.saveToCloud = (data) => set(window.dbRef, data);
+        window.onCloudUpdate = (callback) => onValue(window.dbRef, (snapshot) => callback(snapshot.val()));
+    </script>
+</head>
+<body class="bg-slate-50 min-h-screen" x-data="plannerApp()" x-init="init()">
+
+    <!-- Fixed Navbar -->
+    <nav class="bg-white border-b sticky top-0 z-50 shadow-sm h-20 flex items-center">
+        <div class="max-w-[1400px] mx-auto px-6 w-full flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold">iF</div>
+                <h1 class="font-black text-slate-800 text-xl tracking-tighter">Symposium Planner <span class="text-blue-600">2026</span></h1>
             </div>
 
-            <div class="flex items-center gap-3">
-                <div class="bg-slate-100 p-1 rounded-xl flex items-center border">
-                    <button @click="setMode(true)" :class="isEdit ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'" class="px-5 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2">
-                        <i data-lucide="pencil-line" size="16"></i> Edit Mode
-                    </button>
-                    <button @click="setMode(false)" :class="!isEdit ? 'bg-white shadow-sm text-emerald-600' : 'text-slate-500'" class="px-5 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2">
-                        <i data-lucide="globe" size="16"></i> Published
-                    </button>
+            <div class="flex items-center gap-4">
+                <div class="flex bg-slate-100 p-1 rounded-xl border">
+                    <button @click="toggleEdit()" :class="isEdit ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'" class="px-5 py-2 rounded-lg text-sm font-bold transition-all">Edit Mode</button>
+                    <button @click="isEdit = false" :class="!isEdit ? 'bg-white shadow-sm text-emerald-600' : 'text-slate-500'" class="px-5 py-2 rounded-lg text-sm font-bold transition-all">Published</button>
                 </div>
-                
-                <div class="h-8 w-[1px] bg-slate-200 mx-2"></div>
-
-                <button @click="resetToDefault()" class="text-slate-400 hover:text-rose-500 p-2 transition" title="Reset to Factory Data">
-                    <i data-lucide="refresh-ccw" size="18"></i>
-                </button>
-                <button @click="exportToExcel()" class="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-800 transition shadow-lg shadow-slate-200 flex items-center gap-2">
-                    <i data-lucide="file-down" size="18"></i> Export
-                </button>
+                <button @click="exportExcel()" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold">Export Excel</button>
             </div>
         </div>
     </nav>
 
-    <!-- THEME SETTINGS BAR (Edit Only) -->
-    <div x-show="isEdit" x-transition class="bg-blue-50 border-b border-blue-100">
-        <div class="max-w-[1400px] mx-auto px-6 py-4 grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-                <label class="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1 block">Conference Theme</label>
-                <input type="text" x-model="data.conferenceTheme" @input="save()" class="w-full bg-white border-blue-200 border rounded-lg p-2 text-sm font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500">
-            </div>
-            <div>
-                <label class="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1 block">Day 1 Theme</label>
-                <input type="text" x-model="data.day1Theme" @input="save()" class="w-full bg-white border-blue-200 border rounded-lg p-2 text-sm font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500">
-            </div>
-            <div>
-                <label class="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1 block">Day 2 Theme</label>
-                <input type="text" x-model="data.day2Theme" @input="save()" class="w-full bg-white border-blue-200 border rounded-lg p-2 text-sm font-bold text-slate-700 outline-none focus:ring-2 ring-blue-500">
-            </div>
-        </div>
-    </div>
-
-    <!-- MAIN VIEW -->
-    <main class="max-w-[1400px] mx-auto px-6 py-10">
-        <div class="mb-12 text-center space-y-3">
-            <h2 class="text-5xl font-black text-slate-900 tracking-tight" x-text="data.conferenceTheme"></h2>
-            <div x-show="!isEdit" class="inline-flex items-center gap-2 bg-emerald-50 text-emerald-600 px-4 py-1 rounded-full text-xs font-bold border border-emerald-100">
-                <i data-lucide="check-circle" size="14"></i> Live Public View
-            </div>
+    <!-- Content -->
+    <main class="max-w-[1400px] mx-auto px-6 py-12">
+        <div class="text-center mb-16">
+            <template x-if="isEdit">
+                <input type="text" x-model="data.conferenceTheme" @input="sync()" class="text-5xl font-black text-slate-900 text-center bg-transparent border-b-2 border-dashed border-blue-200 w-full outline-none py-2">
+            </template>
+            <h2 x-show="!isEdit" class="text-5xl font-black text-slate-900 tracking-tight" x-text="data.conferenceTheme"></h2>
+            <p class="text-slate-400 mt-4 font-medium uppercase tracking-widest text-sm">Official Symposium Itinerary</p>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
-            <!-- Day 1 -->
-            <div class="space-y-6">
-                <div class="bg-rose-600 rounded-2xl p-6 shadow-xl text-white flex justify-between items-end">
-                    <div>
-                        <h3 class="text-3xl font-black italic tracking-tighter">DAY 01</h3>
-                        <p class="text-rose-100 font-medium" x-text="data.day1Theme"></p>
-                    </div>
-                    <div class="text-right">
-                        <span class="text-[10px] font-bold text-rose-300 uppercase block">Starts</span>
-                        <input x-show="isEdit" type="time" x-model="data.day1StartTime" @input="save()" class="bg-rose-500 rounded px-2 font-black border-none text-white outline-none">
-                        <span x-show="!isEdit" class="block font-black text-xl" x-text="data.day1StartTime"></span>
-                    </div>
-                </div>
-
-                <div id="day1-list" class="space-y-4">
-                    <template x-for="event in calculatedDay1" :key="event.id">
-                        <div :data-id="event.id" class="group relative bg-white border border-slate-200 p-5 rounded-2xl shadow-sm border-l-[6px]" :class="getColorClasses(event.type)">
-                            <div class="flex justify-between items-start mb-3">
-                                <span class="text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest bg-white/60" x-text="event.type"></span>
-                                <span class="text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1 rounded-lg" x-text="event.start + ' - ' + event.end"></span>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+            <!-- Day 1 & 2 Loop -->
+            <template x-for="d in [1, 2]">
+                <div class="space-y-6">
+                    <!-- Day Header -->
+                    <div :class="d === 1 ? 'bg-slate-900 shadow-slate-200' : 'bg-blue-700 shadow-blue-200'" class="rounded-[2.5rem] p-10 text-white shadow-2xl relative">
+                        <div class="flex justify-between items-end">
+                            <div class="space-y-1">
+                                <h3 class="text-xs font-black uppercase tracking-[0.4em] opacity-50">Day 0<span x-text="d"></span></h3>
+                                <template x-if="isEdit">
+                                    <input type="text" x-model="data['day'+d+'Theme']" @input="sync()" class="bg-transparent border-b border-white/20 text-3xl font-bold outline-none w-full">
+                                </template>
+                                <p x-show="!isEdit" class="text-3xl font-bold" x-text="data['day'+d+'Theme']"></p>
                             </div>
-                            <h4 class="font-bold text-slate-900 text-lg leading-tight mb-2" x-text="event.topic"></h4>
-                            <div class="flex justify-between items-center">
-                                <p class="text-sm font-semibold text-slate-500" x-text="event.speaker"></p>
-                                <span class="text-[10px] font-bold text-slate-400" x-text="event.duration + 'm'"></span>
-                            </div>
-
-                            <div x-show="isEdit" class="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button @click="openEditModal(1, event)" class="bg-white border p-2 rounded-full text-blue-600 hover:bg-blue-50 shadow-sm"><i data-lucide="edit-2" size="14"></i></button>
-                                <button @click="deleteEvent(1, event.id)" class="bg-white border p-2 rounded-full text-rose-600 hover:bg-rose-50 shadow-sm"><i data-lucide="trash-2" size="14"></i></button>
-                                <div class="drag-handle bg-white border p-2 rounded-full text-slate-400 cursor-grab"><i data-lucide="grip-vertical" size="14"></i></div>
+                            <div class="text-right">
+                                <span class="text-[10px] font-black uppercase opacity-40">Starts At</span>
+                                <input x-show="isEdit" type="time" x-model="data['day'+d+'StartTime']" @input="sync()" class="bg-white/10 rounded-lg px-3 py-1 block font-bold mt-1 outline-none">
+                                <span x-show="!isEdit" class="block text-2xl font-black" x-text="data['day'+d+'StartTime']"></span>
                             </div>
                         </div>
-                    </template>
-                </div>
-                <button x-show="isEdit" @click="openAddModal(1)" class="w-full border-2 border-dashed py-4 rounded-2xl text-slate-400 font-bold hover:border-blue-400 hover:text-blue-500 transition-all">+ Add Session</button>
-            </div>
-
-            <!-- Day 2 -->
-            <div class="space-y-6">
-                <div class="bg-blue-600 rounded-2xl p-6 shadow-xl text-white flex justify-between items-end">
-                    <div>
-                        <h3 class="text-3xl font-black italic tracking-tighter">DAY 02</h3>
-                        <p class="text-blue-100 font-medium" x-text="data.day2Theme"></p>
                     </div>
-                    <div class="text-right">
-                        <span class="text-[10px] font-bold text-blue-300 uppercase block">Starts</span>
-                        <input x-show="isEdit" type="time" x-model="data.day2StartTime" @input="save()" class="bg-blue-500 rounded px-2 font-black border-none text-white outline-none">
-                        <span x-show="!isEdit" class="block font-black text-xl" x-text="data.day2StartTime"></span>
+
+                    <!-- Events List -->
+                    <div :id="'day'+d+'-list'" class="space-y-4 min-h-[100px] px-2">
+                        <template x-for="item in (d === 1 ? calculatedDay1 : calculatedDay2)" :key="item.id">
+                            <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative group border-l-[8px]" :class="getColor(item.type)">
+                                <div class="flex justify-between items-start mb-3">
+                                    <span class="text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-slate-50" x-text="item.type"></span>
+                                    <span class="text-xs font-bold text-slate-400 font-mono bg-slate-50 px-2 py-1 rounded" x-text="item.start + ' - ' + item.end"></span>
+                                </div>
+                                <h4 class="font-bold text-slate-800 text-lg mb-1" x-text="item.topic"></h4>
+                                <div class="flex justify-between items-center mt-4">
+                                    <p class="text-sm font-bold text-slate-400" x-text="item.speaker"></p>
+                                    <div x-show="isEdit" class="flex gap-2">
+                                        <button @click="editItem(d, item)" class="p-2 text-blue-500 bg-blue-50 rounded-full"><i data-lucide="edit-3" size="14"></i></button>
+                                        <button @click="deleteItem(d, item.id)" class="p-2 text-red-500 bg-red-50 rounded-full"><i data-lucide="trash-2" size="14"></i></button>
+                                        <div class="drag-handle p-2 text-slate-300 cursor-grab hover:text-slate-600"><i data-lucide="grip-vertical" size="16"></i></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
                     </div>
+                    
+                    <button x-show="isEdit" @click="addItem(d)" class="w-full border-4 border-dashed border-slate-200 p-6 rounded-[2rem] text-slate-300 font-black text-xl hover:border-blue-400 hover:text-blue-500 hover:bg-white transition-all">+ Add New Session</button>
                 </div>
-
-                <div id="day2-list" class="space-y-4">
-                    <template x-for="event in calculatedDay2" :key="event.id">
-                        <div :data-id="event.id" class="group relative bg-white border border-slate-200 p-5 rounded-2xl shadow-sm border-l-[6px]" :class="getColorClasses(event.type)">
-                            <div class="flex justify-between items-start mb-3">
-                                <span class="text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest bg-white/60" x-text="event.type"></span>
-                                <span class="text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1 rounded-lg" x-text="event.start + ' - ' + event.end"></span>
-                            </div>
-                            <h4 class="font-bold text-slate-900 text-lg leading-tight mb-2" x-text="event.topic"></h4>
-                            <div class="flex justify-between items-center">
-                                <p class="text-sm font-semibold text-slate-500" x-text="event.speaker"></p>
-                                <span class="text-[10px] font-bold text-slate-400" x-text="event.duration + 'm'"></span>
-                            </div>
-
-                            <div x-show="isEdit" class="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button @click="openEditModal(2, event)" class="bg-white border p-2 rounded-full text-blue-600 hover:bg-blue-50 shadow-sm"><i data-lucide="edit-2" size="14"></i></button>
-                                <button @click="deleteEvent(2, event.id)" class="bg-white border p-2 rounded-full text-rose-600 hover:bg-rose-50 shadow-sm"><i data-lucide="trash-2" size="14"></i></button>
-                                <div class="drag-handle bg-white border p-2 rounded-full text-slate-400 cursor-grab"><i data-lucide="grip-vertical" size="14"></i></div>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-                <button x-show="isEdit" @click="openAddModal(2)" class="w-full border-2 border-dashed py-4 rounded-2xl text-slate-400 font-bold hover:border-blue-400 hover:text-blue-500 transition-all">+ Add Session</button>
-            </div>
+            </template>
         </div>
     </main>
 
-    <!-- MODAL -->
-    <div x-show="showModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm" x-cloak>
-        <div @click.away="showModal = false" class="bg-white rounded-[32px] max-w-xl w-full p-10 space-y-6 shadow-2xl">
-            <h3 class="text-2xl font-black text-slate-900" x-text="editingId ? 'Edit Session' : 'New Session'"></h3>
-            <div class="grid grid-cols-2 gap-4">
-                <div class="col-span-2">
-                    <label class="text-[10px] font-black text-slate-400 uppercase">Topic</label>
-                    <input x-model="form.topic" type="text" class="w-full bg-slate-50 p-4 rounded-xl outline-none font-bold">
-                </div>
-                <div class="col-span-2">
-                    <label class="text-[10px] font-black text-slate-400 uppercase">Speaker</label>
-                    <input x-model="form.speaker" type="text" class="w-full bg-slate-50 p-4 rounded-xl outline-none font-bold">
+    <!-- Edit Modal -->
+    <div x-show="showModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md" x-cloak>
+        <div class="bg-white rounded-[3rem] max-w-xl w-full p-12 shadow-2xl space-y-8">
+            <h3 class="text-3xl font-black text-slate-900" x-text="editingId ? 'Edit Session' : 'Add Session'"></h3>
+            <div class="space-y-6">
+                <div>
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Topic Name</label>
+                    <input x-model="form.topic" class="w-full bg-slate-50 p-5 rounded-2xl outline-none font-bold text-slate-700 mt-1">
                 </div>
                 <div>
-                    <label class="text-[10px] font-black text-slate-400 uppercase">Duration</label>
-                    <input x-model="form.duration" type="number" class="w-full bg-slate-50 p-4 rounded-xl outline-none font-bold">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Speaker</label>
+                    <input x-model="form.speaker" class="w-full bg-slate-50 p-5 rounded-2xl outline-none font-bold text-slate-700 mt-1">
                 </div>
-                <div>
-                    <label class="text-[10px] font-black text-slate-400 uppercase">Type</label>
-                    <select x-model="form.type" class="w-full bg-slate-50 p-4 rounded-xl outline-none font-bold">
-                        <option>Keynote</option><option>Panel Discussion</option><option>Fireside Chat</option><option>Break</option><option>Lunch</option><option>Workshop</option>
-                    </select>
+                <div class="grid grid-cols-2 gap-6">
+                    <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Duration (Mins)</label>
+                        <input type="number" x-model="form.duration" class="w-full bg-slate-50 p-5 rounded-2xl outline-none font-bold text-slate-700 mt-1">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Session Type</label>
+                        <select x-model="form.type" class="w-full bg-slate-50 p-5 rounded-2xl outline-none font-bold text-slate-700 mt-1 appearance-none">
+                            <option>Keynote</option><option>Panel Discussion</option><option>Fireside Chat</option><option>Break</option><option>Lunch</option><option>Workshop</option>
+                        </select>
+                    </div>
                 </div>
             </div>
-            <button @click="saveEvent()" class="w-full bg-slate-900 text-white p-5 rounded-2xl font-black">Save Session</button>
+            <div class="flex gap-4 pt-4">
+                <button @click="showModal = false" class="flex-1 p-5 font-bold text-slate-400">Cancel</button>
+                <button @click="saveEntry()" class="flex-1 bg-blue-600 text-white p-5 rounded-2xl font-black shadow-lg shadow-blue-100">Save Changes</button>
+            </div>
         </div>
     </div>
 
     <script>
-        const INITIAL_IFAST_DATA = {
-            conferenceTheme: "Return on Intelligence: AI & Global Wealth",
-            day1Theme: "AI Trends and Global Wealth",
-            day2Theme: "The iFAST Ecosystem",
-            day1StartTime: "09:30",
-            day2StartTime: "09:30",
-            day1Events: [
-                { id: "l7kyva8qi", topic: "Opening Speech", speaker: "Lim Chung Chun", duration: 10, type: "Keynote" },
-                { id: "x6yoss1m0", topic: "AI isn't just a buzzword: It's becoming core...", speaker: "AI trainer", duration: 20, type: "Keynote" },
-                { id: "rvq7pq65j", topic: "Panel Discussion: How Advisers Are Making Use of AI", speaker: "Bernard Chan (SG), Advisers", duration: 40, type: "Panel Discussion" },
-                { id: "17h8zhff", topic: "FH Slot: BlackRock", speaker: "Nicholas Hoon Wei Hann", duration: 20, type: "Workshop" },
-                { id: "qke7prcf9", topic: "Tea Break", speaker: "Emcee", duration: 20, type: "Break" },
-                { id: "l5wqj24za", topic: "The Do-Bots Are Here: Digital employees", speaker: "AI Speaker", duration: 20, type: "Workshop" },
-                { id: "prxd1a7v2", topic: "AI Demo: Advisory Tool in 15 mins", speaker: "Video", duration: 10, type: "Workshop" },
-                { id: "7rqfpoadp", topic: "Hands On Workshop: Build Your App", speaker: "Free and Easy", duration: 30, type: "Workshop" },
-                { id: "wthzbqxi8", topic: "Group Photo", speaker: "Emcee", duration: 20, type: "Break" },
-                { id: "6ewqmc313", topic: "Networking Lunch", speaker: "-", duration: 90, type: "Lunch" },
-                { id: "586p93l30", topic: "FH Slot: Amova Asset Management", speaker: "Edward Pye", duration: 20, type: "Workshop" },
-                { id: "xc6lbz9ea", topic: "Think Global, Act Global", speaker: "Wee Kiong", duration: 15, type: "Keynote" },
-                { id: "sveuj2tj", topic: "Panel: Truly Global Advisor", speaker: "3 Advisers", duration: 50, type: "Panel Discussion" },
-                { id: "1m5w20w7w", topic: "Tea Break", speaker: "Emcee", duration: 20, type: "Break" },
-                { id: "e515t582w", topic: "Global Product/Payment", speaker: "Dennis Tan", duration: 15, type: "Workshop" },
-                { id: "gbm f5rfrs", topic: "The Borderless IFA", speaker: "South African speaker", duration: 30, type: "Workshop" }
-            ],
-            day2Events: [
-                { id: "bpvt549zc", topic: "Opening Speech", speaker: "Emcee", duration: 5, type: "Workshop" },
-                { id: "wf5mgyjb1", topic: "Fireside Chat: Outsource the Alpha", speaker: "Vincent Tong, Mark Liu", duration: 30, type: "Fireside Chat" },
-                { id: "dky1cedha", topic: "FH slot: J.P. Morgan Asset Management", speaker: "Daryl Leong", duration: 20, type: "Workshop" },
-                { id: "ny2moh8lv", topic: "Tea Break", speaker: "-", duration: 15, type: "Break" },
-                { id: "ehga5xxzw", topic: "Closing Speech", speaker: "Lim Chung Chun", duration: 10, type: "Workshop" },
-                { id: "bqah87bg1", topic: "Lunch", speaker: "-", duration: 60, type: "Lunch" }
-            ]
-        };
-
         function plannerApp() {
             return {
-                isEdit: true,
-                showModal: false,
-                editingId: null,
-                activeDay: 1,
-                data: JSON.parse(JSON.stringify(INITIAL_IFAST_DATA)),
+                isEdit: false, showModal: false, editingId: null, activeDay: 1,
+                data: { conferenceTheme: 'Connecting...', day1Events: [], day2Events: [] },
                 form: { topic: '', speaker: '', duration: 20, type: 'Keynote' },
 
                 init() {
-                    // 1. Check LocalStorage first for persistence
-                    const saved = localStorage.getItem('ifast_planner_v1');
-                    if (saved) {
-                        this.data = JSON.parse(saved);
-                    }
-
-                    // 2. Check URL for shared links (overwrites local if present)
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const iten = urlParams.get('itinerary');
-                    if (iten) {
-                        try {
-                            this.data = JSON.parse(decodeURIComponent(atob(iten)));
-                        } catch (e) { console.error("URL Data Invalid"); }
-                    }
-                    if (urlParams.get('mode') === 'published') this.isEdit = false;
-
-                    this.$nextTick(() => {
-                        this.initSortable(1);
-                        this.initSortable(2);
-                        lucide.createIcons();
-                    });
+                    setTimeout(() => {
+                        window.onCloudUpdate((cloudData) => {
+                            if (cloudData) {
+                                this.data = cloudData;
+                            } else {
+                                this.data = this.getInitialiFASTData();
+                                this.sync();
+                            }
+                            this.$nextTick(() => { 
+                                lucide.createIcons();
+                                this.initSortable(1); this.initSortable(2);
+                            });
+                        });
+                    }, 1000);
                 },
 
-                save() {
-                    localStorage.setItem('ifast_planner_v1', JSON.stringify(this.data));
-                    const blob = btoa(encodeURIComponent(JSON.stringify(this.data)));
-                    const mode = this.isEdit ? 'edit' : 'published';
-                    history.replaceState(null, '', `?mode=${mode}&itinerary=${blob}`);
-                },
+                sync() { window.saveToCloud(JSON.parse(JSON.stringify(this.data))); },
 
-                resetToDefault() {
-                    if(confirm("Reset to the original iFAST Symposium itinerary? All custom changes will be lost.")) {
-                        this.data = JSON.parse(JSON.stringify(INITIAL_IFAST_DATA));
-                        this.save();
-                    }
+                toggleEdit() {
+                    const pw = prompt("Enter Admin Password:");
+                    if (pw === "ifast2026") this.isEdit = true;
+                    else alert("Access Denied.");
                 },
-
-                initSortable(day) {
-                    Sortable.create(document.getElementById(`day${day}-list`), {
-                        handle: '.drag-handle',
-                        animation: 150,
-                        onEnd: (evt) => {
-                            const list = day === 1 ? 'day1Events' : 'day2Events';
-                            const item = this.data[list].splice(evt.oldIndex, 1)[0];
-                            this.data[list].splice(evt.newIndex, 0, item);
-                            this.save();
-                        }
-                    });
-                },
-
-                get calculatedDay1() { return this.calculate(this.data.day1Events, this.data.day1StartTime); },
-                get calculatedDay2() { return this.calculate(this.data.day2Events, this.data.day2StartTime); },
 
                 calculate(events, startTime) {
-                    let curr = startTime.split(':').reduce((h, m) => h * 60 + parseInt(m), 0);
+                    if (!events) return [];
+                    let curr = (startTime || "09:30").split(':').reduce((h, m) => h * 60 + parseInt(m), 0);
                     return events.map(e => {
                         const start = `${Math.floor(curr/60).toString().padStart(2,'0')}:${(curr%60).toString().padStart(2,'0')}`;
                         curr += parseInt(e.duration);
@@ -294,62 +190,101 @@
                     });
                 },
 
-                setMode(val) {
-                    this.isEdit = val;
-                    this.save();
-                    this.$nextTick(() => lucide.createIcons());
+                get calculatedDay1() { return this.calculate(this.data.day1Events, this.data.day1StartTime); },
+                get calculatedDay2() { return this.calculate(this.data.day2Events, this.data.day2StartTime); },
+
+                initSortable(d) {
+                    const el = document.getElementById(`day${d}-list`);
+                    if (!el || el.sortableInstance) return;
+                    el.sortableInstance = Sortable.create(el, {
+                        handle: '.drag-handle', animation: 150,
+                        onEnd: (evt) => {
+                            const list = `day${d}Events`;
+                            const item = this.data[list].splice(evt.oldIndex, 1)[0];
+                            this.data[list].splice(evt.newIndex, 0, item);
+                            this.sync();
+                        }
+                    });
                 },
 
-                openAddModal(day) {
-                    this.activeDay = day; this.editingId = null;
+                addItem(d) {
+                    this.activeDay = d; this.editingId = null;
                     this.form = { topic: '', speaker: '', duration: 20, type: 'Keynote' };
                     this.showModal = true;
                 },
 
-                openEditModal(day, event) {
-                    this.activeDay = day; this.editingId = event.id;
-                    this.form = { ...event };
+                editItem(d, item) {
+                    this.activeDay = d; this.editingId = item.id;
+                    this.form = { ...item };
                     this.showModal = true;
                 },
 
-                saveEvent() {
-                    const list = this.activeDay === 1 ? 'day1Events' : 'day2Events';
+                saveEntry() {
+                    const list = `day${this.activeDay}Events`;
                     if (this.editingId) {
                         const idx = this.data[list].findIndex(e => e.id === this.editingId);
                         this.data[list][idx] = { ...this.form };
                     } else {
                         this.data[list].push({ ...this.form, id: Date.now().toString() });
                     }
-                    this.showModal = false;
-                    this.save();
+                    this.showModal = false; this.sync();
                 },
 
-                deleteEvent(day, id) {
-                    const list = day === 1 ? 'day1Events' : 'day2Events';
-                    this.data[list] = this.data[list].filter(e => e.id !== id);
-                    this.save();
+                deleteItem(d, id) {
+                    if(confirm("Delete this session?")) {
+                        this.data[`day${d}Events`] = this.data[`day${d}Events`].filter(e => e.id !== id);
+                        this.sync();
+                    }
                 },
 
-                getColorClasses(type) {
-                    const map = {
-                        'Keynote': 'border-rose-500 bg-rose-50/30 text-rose-700',
-                        'Panel Discussion': 'border-sky-500 bg-sky-50/30 text-sky-700',
-                        'Fireside Chat': 'border-sky-500 bg-sky-50/30 text-sky-700',
-                        'Break': 'border-emerald-500 bg-emerald-50/30 text-emerald-700',
-                        'Lunch': 'border-emerald-500 bg-emerald-50/30 text-emerald-700',
-                        'Workshop': 'border-amber-500 bg-amber-50/30 text-amber-700'
-                    };
+                getColor(type) {
+                    const map = { 'Keynote': 'border-rose-500 bg-rose-50/20', 'Panel Discussion': 'border-blue-500 bg-blue-50/20', 'Break': 'border-emerald-500 bg-emerald-50/20', 'Lunch': 'border-emerald-500 bg-emerald-50/20', 'Workshop': 'border-amber-500 bg-amber-50/20' };
                     return map[type] || 'border-slate-300';
                 },
 
-                exportToExcel() {
-                    let csv = "Day,Start,End,Topic,Speaker,Type\n";
-                    this.calculatedDay1.forEach(e => csv += `Day 1,${e.start},${e.end},"${e.topic}","${e.speaker}",${e.type}\n`);
-                    this.calculatedDay2.forEach(e => csv += `Day 2,${e.start},${e.end},"${e.topic}","${e.speaker}",${e.type}\n`);
-                    const link = document.createElement("a");
-                    link.setAttribute("href", encodeURI("data:text/csv;charset=utf-8," + csv));
-                    link.setAttribute("download", "iFAST_Symposium_2026.csv");
-                    link.click();
+                exportExcel() {
+                    let csv = "Day,Start,End,Topic,Speaker,Duration,Type\n";
+                    this.calculatedDay1.forEach(e => csv += `Day 1,${e.start},${e.end},"${e.topic}","${e.speaker}",${e.duration},${e.type}\n`);
+                    this.calculatedDay2.forEach(e => csv += `Day 2,${e.start},${e.end},"${e.topic}","${e.speaker}",${e.duration},${e.type}\n`);
+                    const a = document.createElement("a");
+                    a.href = 'data:text/csv;charset=utf-8,' + encodeURI(csv);
+                    a.download = 'iFAST_2026_Itinerary.csv'; a.click();
+                },
+
+                getInitialiFASTData() {
+                    return {
+                        conferenceTheme: "Return on Intelligence: AI & Global Wealth",
+                        day1Theme: "AI Trends and Global Wealth", day2Theme: "The iFAST Ecosystem",
+                        day1StartTime: "09:30", day2StartTime: "09:30",
+                        day1Events: [
+                            { id: "1", topic: "Opening Speech", speaker: "Lim Chung Chun", duration: 10, type: "Keynote" },
+                            { id: "2", topic: "AI isn't just a buzzword: Core to competitive delivery", speaker: "AI trainer", duration: 20, type: "Keynote" },
+                            { id: "3", topic: "Panel Discussion: How Advisers Are Making Use of AI", speaker: "Bernard Chan (SG), Adviser 1 (HK), Adviser (MY)", duration: 40, type: "Panel Discussion" },
+                            { id: "4", topic: "FH Slot: BlackRock", speaker: "Nicholas Hoon Wei Hann", duration: 20, type: "Workshop" },
+                            { id: "5", topic: "Tea Break", speaker: "Emcee", duration: 20, type: "Break" },
+                            { id: "6", topic: "The Do-Bots Are Here: Digital employees", speaker: "AI Speaker", duration: 20, type: "Workshop" },
+                            { id: "7", topic: "AI Demo: Advisory Tool in 15 mins", speaker: "Video", duration: 10, type: "Workshop" },
+                            { id: "8", topic: "Hands On Workshop: Build Your App", speaker: "Free and Easy", duration: 30, type: "Workshop" },
+                            { id: "9", topic: "Group Photo", speaker: "Emcee", duration: 20, type: "Break" },
+                            { id: "10", topic: "Networking Lunch", speaker: "-", duration: 90, type: "Lunch" },
+                            { id: "11", topic: "FH Slot: Amova Asset Management", speaker: "Edward Pye Kaung Linn", duration: 20, type: "Workshop" },
+                            { id: "12", topic: "Think Global, Act Global", speaker: "Wee Kiong", duration: 15, type: "Keynote" },
+                            { id: "13", topic: "Panel: Truly Global Advisor", speaker: "3 Advisers + Dalton", duration: 50, type: "Panel Discussion" },
+                            { id: "14", topic: "Tea Break", speaker: "Emcee", duration: 20, type: "Break" },
+                            { id: "15", topic: "Global Product/Payment", speaker: "Dennis Tan", duration: 15, type: "Workshop" },
+                            { id: "16", topic: "The Borderless IFA", speaker: "South African speaker", duration: 30, type: "Workshop" }
+                        ],
+                        day2Events: [
+                            { id: "21", topic: "Opening Speech", speaker: "Emcee", duration: 5, type: "Workshop" },
+                            { id: "22", topic: "Fireside Chat: Outsource the Alpha (DPMS)", speaker: "Vincent Tong, Mark Liu", duration: 30, type: "Panel Discussion" },
+                            { id: "23", topic: "FH slot: J.P. Morgan Asset Management", speaker: "Daryl Leong", duration: 20, type: "Workshop" },
+                            { id: "24", topic: "The Platform-Powered Mini Private Banker", speaker: "Wong Weiyi", duration: 20, type: "Workshop" },
+                            { id: "25", topic: "Tea Break", speaker: "-", duration: 15, type: "Break" },
+                            { id: "26", topic: "Award Presentation for Top 3 AI tool", speaker: "Emcee", duration: 30, type: "Workshop" },
+                            { id: "27", topic: "Closing Speech", speaker: "Lim Chung Chun", duration: 10, type: "Workshop" },
+                            { id: "28", topic: "Lunch", speaker: "-", duration: 60, type: "Lunch" }
+                        ]
+                    };
                 }
             }
         }
