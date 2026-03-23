@@ -7,15 +7,12 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <!-- Sortable.js removed as we are switching to Up/Down buttons -->
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-        // ============================================================
-        // FIREBASE CONFIGURATION
-        // ============================================================
         const firebaseConfig = {
             apiKey: "AIzaSyDR2PyIsbw_hC-VX_o1wq3Hrs8ENsw6ik4",
             authDomain: "symposium-planner.firebaseapp.com",
@@ -37,9 +34,8 @@
     <style>
         [x-cloak] { display: none !important; }
         .session-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .sortable-ghost { opacity: 0.1; background: #cbd5e1; border: 2px dashed #64748b; }
-        .drag-handle { cursor: grab; }
-        .drag-handle:active { cursor: grabbing; }
+        .session-card.clickable { cursor: pointer; }
+        .session-card.clickable:hover { transform: translateY(-4px); border-color: #3b82f6; }
         input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); }
     </style>
 </head>
@@ -103,7 +99,11 @@
                     <!-- SESSION LIST -->
                     <div :id="'day'+d+'-list'" class="space-y-5 min-h-[200px] px-2">
                         <template x-for="(item, index) in (d === 1 ? calculatedDay1 : calculatedDay2)" :key="item.id">
-                            <div class="session-card bg-white p-7 rounded-[2.5rem] border border-slate-200 shadow-sm relative border-l-[14px]" :class="getColor(item.type)">
+                            <div 
+                                @click="!isEdit && viewSynopsis(item)"
+                                class="session-card bg-white p-7 rounded-[2.5rem] border border-slate-200 shadow-sm relative border-l-[14px]" 
+                                :class="[getColor(item.type), !isEdit ? 'clickable' : '']"
+                            >
                                 
                                 <div class="flex justify-between items-start mb-5">
                                     <div class="flex flex-wrap gap-2">
@@ -130,9 +130,12 @@
                                     </div>
                                     
                                     <div x-show="isEdit" class="flex gap-1">
-                                        <button @click="editItem(d, item)" class="p-2.5 text-blue-500 hover:bg-blue-50 rounded-xl transition-colors"><i data-lucide="pencil" size="18"></i></button>
-                                        <button @click="deleteItem(d, item.id)" class="p-2.5 text-red-400 hover:bg-red-50 rounded-xl transition-colors"><i data-lucide="trash-2" size="18"></i></button>
-                                        <div class="drag-handle p-2.5 text-slate-300 hover:text-slate-600 transition-colors"><i data-lucide="grip-vertical" size="20"></i></div>
+                                        <!-- Reorder Controls -->
+                                        <button @click.stop="moveItem(d, index, -1)" class="p-2.5 text-slate-400 hover:bg-slate-50 rounded-xl transition-colors" :disabled="index === 0" :class="index === 0 && 'opacity-20'"><i data-lucide="chevron-up" size="18"></i></button>
+                                        <button @click.stop="moveItem(d, index, 1)" class="p-2.5 text-slate-400 hover:bg-slate-50 rounded-xl transition-colors" :disabled="index === (d === 1 ? data.day1Events.length - 1 : data.day2Events.length - 1)" :class="index === (d === 1 ? data.day1Events.length - 1 : data.day2Events.length - 1) && 'opacity-20'"><i data-lucide="chevron-down" size="18"></i></button>
+                                        
+                                        <button @click.stop="editItem(d, item)" class="p-2.5 text-blue-500 hover:bg-blue-50 rounded-xl transition-colors"><i data-lucide="pencil" size="18"></i></button>
+                                        <button @click.stop="deleteItem(d, item.id)" class="p-2.5 text-red-400 hover:bg-red-50 rounded-xl transition-colors"><i data-lucide="trash-2" size="18"></i></button>
                                     </div>
                                 </div>
                             </div>
@@ -148,6 +151,34 @@
         </div>
     </main>
 
+    <!-- SYNOPSIS VIEW MODAL (Published Mode) -->
+    <div x-show="showViewModal" class="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-xl" x-cloak x-transition>
+        <div @click.away="showViewModal = false" class="bg-white rounded-[3.5rem] max-w-2xl w-full p-12 shadow-2xl border border-white/20">
+            <div class="mb-8">
+                <span class="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 border border-blue-100" x-text="viewingItem?.type"></span>
+                <h3 class="text-4xl font-black text-slate-900 tracking-tight mt-4 leading-tight" x-text="viewingItem?.topic"></h3>
+                <div class="mt-4 flex items-center gap-3">
+                    <div class="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center">
+                        <i data-lucide="user-round" class="text-slate-400"></i>
+                    </div>
+                    <div>
+                        <div class="font-bold text-slate-900" x-text="viewingItem?.speaker"></div>
+                        <div class="text-xs font-bold text-slate-400 uppercase" x-text="viewingItem?.title"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="space-y-4">
+                <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Synopsis</h4>
+                <div class="text-lg text-slate-600 leading-relaxed max-h-[40vh] overflow-y-auto pr-4" x-text="viewingItem?.synopsis || 'No synopsis available for this session.'"></div>
+            </div>
+
+            <button @click="showViewModal = false" class="w-full bg-slate-900 text-white p-6 rounded-[2rem] font-black text-xl mt-10 hover:bg-slate-800 transition-all">
+                Close
+            </button>
+        </div>
+    </div>
+
     <!-- EDIT/ADD MODAL -->
     <div x-show="showModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-xl" x-cloak x-transition>
         <div @click.away="showModal = false" class="bg-white rounded-[3.5rem] max-w-2xl w-full p-12 shadow-2xl border border-white/20">
@@ -160,6 +191,11 @@
                 <div class="space-y-2">
                     <label class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Presentation Topic</label>
                     <input x-model="form.topic" class="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl outline-none focus:border-blue-500 font-bold text-lg transition-all">
+                </div>
+
+                <div class="space-y-2">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Synopsis</label>
+                    <textarea x-model="form.synopsis" rows="3" class="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl outline-none focus:border-blue-500 font-bold transition-all" placeholder="Enter session details..."></textarea>
                 </div>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -202,9 +238,10 @@
     <script>
         function plannerApp() {
             return {
-                isEdit: false, showModal: false, editingId: null, activeDay: 1,
+                isEdit: false, showModal: false, showViewModal: false, editingId: null, activeDay: 1,
+                viewingItem: null,
                 data: { conferenceTheme: 'Connecting to Cloud...', day1Events: [], day2Events: [] },
-                form: { topic: '', speaker: '', title: '', duration: 20, type: 'Internal Keynote' },
+                form: { topic: '', speaker: '', title: '', duration: 20, type: 'Internal Keynote', synopsis: '' },
 
                 init() {
                     setTimeout(() => {
@@ -217,7 +254,6 @@
                             }
                             this.$nextTick(() => { 
                                 lucide.createIcons();
-                                this.initSortable(1); this.initSortable(2);
                             });
                         });
                     }, 1000);
@@ -225,6 +261,7 @@
 
                 sync() { 
                     window.saveToCloud(JSON.parse(JSON.stringify(this.data))); 
+                    this.$nextTick(() => lucide.createIcons());
                 },
 
                 toggleEdit() {
@@ -247,26 +284,31 @@
                 get calculatedDay1() { return this.calculate(this.data.day1Events, this.data.day1StartTime); },
                 get calculatedDay2() { return this.calculate(this.data.day2Events, this.data.day2StartTime); },
 
-                initSortable(d) {
-                    const el = document.getElementById(`day${d}-list`);
-                    if (!el) return;
-                    if (el.sortableInstance) el.sortableInstance.destroy();
-                    el.sortableInstance = Sortable.create(el, {
-                        handle: '.drag-handle', animation: 250,
-                        onEnd: (evt) => {
-                            const listKey = `day${d}Events`;
-                            const list = [...this.data[listKey]];
-                            const item = list.splice(evt.oldIndex, 1)[0];
-                            list.splice(evt.newIndex, 0, item);
-                            this.data[listKey] = list;
-                            this.sync();
-                        }
-                    });
+                // Change 1: New moveItem function replacing SortableJS
+                moveItem(d, index, direction) {
+                    const listKey = `day${d}Events`;
+                    const list = [...this.data[listKey]];
+                    const newIndex = index + direction;
+                    
+                    if (newIndex >= 0 && newIndex < list.length) {
+                        const temp = list[index];
+                        list[index] = list[newIndex];
+                        list[newIndex] = temp;
+                        this.data[listKey] = list;
+                        this.sync();
+                    }
+                },
+
+                // Change 2: Synopsis viewing
+                viewSynopsis(item) {
+                    this.viewingItem = item;
+                    this.showViewModal = true;
+                    this.$nextTick(() => lucide.createIcons());
                 },
 
                 addItem(d) {
                     this.activeDay = d; this.editingId = null;
-                    this.form = { topic: '', speaker: '', title: '', duration: 20, type: 'Internal Keynote' };
+                    this.form = { topic: '', speaker: '', title: '', duration: 20, type: 'Internal Keynote', synopsis: '' };
                     this.showModal = true;
                 },
 
@@ -325,36 +367,36 @@
                         day1Theme: "AI Trends and Global Wealth", day2Theme: "The iFAST Ecosystem",
                         day1StartTime: "09:30", day2StartTime: "09:30",
                         day1Events: [
-                            { id: "d1s1", topic: "Opening Speech", speaker: "Lim Chung Chun", title: "Chairman & CEO, iFAST Corp", duration: 10, type: "Internal Keynote" },
-                            { id: "d1s2", topic: "AI isn't just a buzzword: It's becoming core to competitive advice delivery", speaker: "AI trainer", title: "External Consultant", duration: 20, type: "External Keynote" },
-                            { id: "d1s3", topic: "Panel Discussion: How Advisers Are Making Use of AI", speaker: "Bernard Chan (SG), Advisers", title: "Panelists", duration: 40, type: "Panel Discussion" },
-                            { id: "d1s4", topic: "FH Slot: BlackRock", speaker: "Nicholas Hoon Wei Hann", title: "BlackRock Asset Management", duration: 20, type: "Workshop" },
-                            { id: "d1s5", topic: "Tea Break", speaker: "Emcee", title: "-", duration: 20, type: "Break" },
-                            { id: "d1s6", topic: "The Do-Bots Are Here: Digital employees monitor portfolios 24/7", speaker: "AI Speaker", title: "Tech Lead", duration: 20, type: "Workshop" },
-                            { id: "d1s7", topic: "AI Demo: Building Your Own Advisory Tool in 15 mins", speaker: "Video", title: "-", duration: 10, type: "Workshop" },
-                            { id: "d1s8", topic: "Hands On Workshop: Build Your App", speaker: "Free and Easy", title: "-", duration: 30, type: "Workshop" },
-                            { id: "d1s9", topic: "Group Photo", speaker: "Emcee", title: "-", duration: 20, type: "Break" },
-                            { id: "d1s10", topic: "Networking Lunch", speaker: "-", title: "-", duration: 90, type: "Lunch" },
-                            { id: "d1s11", topic: "FH Slot: Amova Asset Management", speaker: "Edward Pye Kaung Linn", title: "Amova Representative", duration: 20, type: "Workshop" },
-                            { id: "d1s12", topic: "Think Global, Act Global: Bringing Clients from All Over the World", speaker: "Wee Kiong", title: "Director, iFAST Corp", duration: 15, type: "Internal Keynote" },
-                            { id: "d1s13", topic: "Panel: The \"Truly Global\" Advisor", speaker: "3 Advisers + Dalton", title: "Global Wealth Panel", duration: 50, type: "Panel Discussion" },
-                            { id: "d1s14", topic: "Tea Break", speaker: "Emcee", title: "-", duration: 20, type: "Break" },
-                            { id: "d1s15", topic: "Global Product/Payment", speaker: "Dennis Tan", title: "Lead, Global Products", duration: 15, type: "Workshop" },
-                            { id: "d1s16", topic: "FH slot: Principal Asset Management (MY)", speaker: "FH Speaker", title: "Principal Representative", duration: 15, type: "Workshop" },
-                            { id: "d1s17", topic: "FH Slot: RHB Asset Management (MY)", speaker: "FH Speaker", title: "RHB Representative", duration: 15, type: "Workshop" },
-                            { id: "d1s18", topic: "FH slot: Taikang Asset Management", speaker: "FH Speaker", title: "Taikang Representative", duration: 20, type: "Workshop" },
-                            { id: "d1s19", topic: "The Borderless IFA: What South Africa Teaches Us", speaker: "South African speaker", title: "Global Partner", duration: 30, type: "Workshop" }
+                            { id: "d1s1", topic: "Opening Speech", speaker: "Lim Chung Chun", title: "Chairman & CEO, iFAST Corp", duration: 10, type: "Internal Keynote", synopsis: "" },
+                            { id: "d1s2", topic: "AI isn't just a buzzword: It's becoming core to competitive advice delivery", speaker: "AI trainer", title: "External Consultant", duration: 20, type: "External Keynote", synopsis: "" },
+                            { id: "d1s3", topic: "Panel Discussion: How Advisers Are Making Use of AI", speaker: "Bernard Chan (SG), Advisers", title: "Panelists", duration: 40, type: "Panel Discussion", synopsis: "" },
+                            { id: "d1s4", topic: "FH Slot: BlackRock", speaker: "Nicholas Hoon Wei Hann", title: "BlackRock Asset Management", duration: 20, type: "Workshop", synopsis: "" },
+                            { id: "d1s5", topic: "Tea Break", speaker: "Emcee", title: "-", duration: 20, type: "Break", synopsis: "" },
+                            { id: "d1s6", topic: "The Do-Bots Are Here: Digital employees monitor portfolios 24/7", speaker: "AI Speaker", title: "Tech Lead", duration: 20, type: "Workshop", synopsis: "" },
+                            { id: "d1s7", topic: "AI Demo: Building Your Own Advisory Tool in 15 mins", speaker: "Video", title: "-", duration: 10, type: "Workshop", synopsis: "" },
+                            { id: "d1s8", topic: "Hands On Workshop: Build Your App", speaker: "Free and Easy", title: "-", duration: 30, type: "Workshop", synopsis: "" },
+                            { id: "d1s9", topic: "Group Photo", speaker: "Emcee", title: "-", duration: 20, type: "Break", synopsis: "" },
+                            { id: "d1s10", topic: "Networking Lunch", speaker: "-", title: "-", duration: 90, type: "Lunch", synopsis: "" },
+                            { id: "d1s11", topic: "FH Slot: Amova Asset Management", speaker: "Edward Pye Kaung Linn", title: "Amova Representative", duration: 20, type: "Workshop", synopsis: "" },
+                            { id: "d1s12", topic: "Think Global, Act Global: Bringing Clients from All Over the World", speaker: "Wee Kiong", title: "Director, iFAST Corp", duration: 15, type: "Internal Keynote", synopsis: "" },
+                            { id: "d1s13", topic: "Panel: The \"Truly Global\" Advisor", speaker: "3 Advisers + Dalton", title: "Global Wealth Panel", duration: 50, type: "Panel Discussion", synopsis: "" },
+                            { id: "d1s14", topic: "Tea Break", speaker: "Emcee", title: "-", duration: 20, type: "Break", synopsis: "" },
+                            { id: "d1s15", topic: "Global Product/Payment", speaker: "Dennis Tan", title: "Lead, Global Products", duration: 15, type: "Workshop", synopsis: "" },
+                            { id: "d1s16", topic: "FH slot: Principal Asset Management (MY)", speaker: "FH Speaker", title: "Principal Representative", duration: 15, type: "Workshop", synopsis: "" },
+                            { id: "d1s17", topic: "FH Slot: RHB Asset Management (MY)", speaker: "FH Speaker", title: "RHB Representative", duration: 15, type: "Workshop", synopsis: "" },
+                            { id: "d1s18", topic: "FH slot: Taikang Asset Management", speaker: "FH Speaker", title: "Taikang Representative", duration: 20, type: "Workshop", synopsis: "" },
+                            { id: "d1s19", topic: "The Borderless IFA: What South Africa Teaches Us", speaker: "South African speaker", title: "Global Partner", duration: 30, type: "Workshop", synopsis: "" }
                         ],
                         day2Events: [
-                            { id: "d2s1", topic: "Opening Speech", speaker: "Emcee", title: "-", duration: 5, type: "Internal Keynote" },
-                            { id: "d2s2", topic: "Fireside Chat: Outsource the Alpha, Own the Relationship (DPMS)", speaker: "Vincent Tong, Mark Liu", title: "iFAST & LGI Executives", duration: 30, type: "Fireside Chat" },
-                            { id: "d2s3", topic: "FH slot: J.P. Morgan Asset Management", speaker: "Daryl Leong", title: "JPM Representative", duration: 20, type: "Workshop" },
-                            { id: "d2s4", topic: "The Platform-Powered \"Mini Private Banker\"", speaker: "Wong Weiyi", title: "Manager, iFAST", duration: 20, type: "Workshop" },
-                            { id: "d2s5", topic: "Tea Break", speaker: "-", title: "-", duration: 15, type: "Break" },
-                            { id: "d2s6", topic: "FH slot: AHAM Asset Management (MY)", speaker: "FH Speaker", title: "AHAM Representative", duration: 15, type: "Workshop" },
-                            { id: "d2s7", topic: "Showcase + Award Presentation for Top 3 AI tool", speaker: "Emcee", title: "-", duration: 30, type: "Workshop" },
-                            { id: "d2s8", topic: "Closing Speech", speaker: "Lim Chung Chun", title: "Chairman & CEO", duration: 10, type: "Internal Keynote" },
-                            { id: "d2s9", topic: "Lunch", speaker: "-", title: "-", duration: 60, type: "Lunch" }
+                            { id: "d2s1", topic: "Opening Speech", speaker: "Emcee", title: "-", duration: 5, type: "Internal Keynote", synopsis: "" },
+                            { id: "d2s2", topic: "Fireside Chat: Outsource the Alpha, Own the Relationship (DPMS)", speaker: "Vincent Tong, Mark Liu", title: "iFAST & LGI Executives", duration: 30, type: "Fireside Chat", synopsis: "" },
+                            { id: "d2s3", topic: "FH slot: J.P. Morgan Asset Management", speaker: "Daryl Leong", title: "JPM Representative", duration: 20, type: "Workshop", synopsis: "" },
+                            { id: "d2s4", topic: "The Platform-Powered \"Mini Private Banker\"", speaker: "Wong Weiyi", title: "Manager, iFAST", duration: 20, type: "Workshop", synopsis: "" },
+                            { id: "d2s5", topic: "Tea Break", speaker: "-", title: "-", duration: 15, type: "Break", synopsis: "" },
+                            { id: "d2s6", topic: "FH slot: AHAM Asset Management (MY)", speaker: "FH Speaker", title: "AHAM Representative", duration: 15, type: "Workshop", synopsis: "" },
+                            { id: "d2s7", topic: "Showcase + Award Presentation for Top 3 AI tool", speaker: "Emcee", title: "-", duration: 30, type: "Workshop", synopsis: "" },
+                            { id: "d2s8", topic: "Closing Speech", speaker: "Lim Chung Chun", title: "Chairman & CEO", duration: 10, type: "Internal Keynote", synopsis: "" },
+                            { id: "d2s9", topic: "Lunch", speaker: "-", title: "-", duration: 60, type: "Lunch", synopsis: "" }
                         ]
                     };
                 }
